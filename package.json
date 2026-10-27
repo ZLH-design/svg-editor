@@ -1,0 +1,16 @@
+{
+  "name": "svg-editor",
+  "version": "0.1.0",
+  "description": "Lab1 Phase 1 - SVG editor CLI (TypeScript, Command + Composite)",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "cli": "node dist/main.js",
+    "test": "npm run build && node dist/test/run.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  },
+  "license": "MIT"
+}
