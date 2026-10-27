@@ -121,14 +121,14 @@ Interp --> Err
 
 与 AI 协作过程中几个关键判断与被纠正的错误：
 
-1. **tree 缩进多了一层**（真实 bug，被测试抓到）。`TreeRenderer` 初版把根节点也算进前缀缩进，导致 `tree` 的第一层子节点前面多出 4 个空格，与 spec 5.1 不符。修正为"根不产生缩进段"（`for (…; depth > 1; …)`），并把 spec §5.1/§6 的完整 transcript 固化成断言，防止回归。
-2. **spec 自身的两处不一致**，我选择按字面/按更完整的示例实现，并在此登记：
-   - *tree 列宽*：§5.1 顶层对齐到第 15 列、§6.1 对齐到第 17 列，同一规则算不出两个值，判断为手写示例。实现统一为"同层最长标签 + 2 空格"，与 §5.1 的嵌套层、§6.1 的观察值同量级。
-   - *`ungroup` 根级容器*：§4.2 写"ungroup 根级容器（svg 直接子节点）→ `cannot ungroup top-level container`"。字面理解会让"解散刚建的顶层 group"直接失败，与 `group` 的对称性不符；但错误表是明确的验收口径，因此**按字面实现**（`UngroupCommandHandler` 中显式判断），在此记录异议。
-3. **line 的 tree 摘要不带 stroke**。§6.1 的 tree 里 `line#arrow1 (280,130) -> (520,130)` 没有 `stroke=black`，而 rect/circle 都带 `fill`。判断为 line 的内联格式就是"两个端点"，于是 `LineShape.summary()` 只输出端点，`stroke` 只在 `show` 里出现。
-4. **text 内容是子文本而非属性**，因此 XML 转义必须发生在写入时（`escapeXml`）、还原发生在读入时（`unescapeXml`）。第一版 `SvgReader` 忘了还原，round-trip 测试立刻暴露出 `Hello &amp; &lt;World&gt;` 被二次转义；修好后加了"save → read → 再 save，两次文件字节相同"的断言。
-5. **`ungroup` 之后容器本身要消失**（不是留下空壳）。实现上先把子节点从容器摘出、再把容器从父级摘出并注销 id，子节点占据容器原来的下标；undo 时反向复原。第一版误以为要保留空 `g`，用 z-order/ungroup 用例的 tree 输出确认了行为。
-6. **文档类命令的 undo 语义**：`init/read/save/canvas 改尺寸` 之后我选择"清空两个栈 + 上锁"，而不是保留栈。理由是跨文档撤销的语义无法定义（撤销到已不存在的文档），而 spec 只规定了要报 `error: undo not allowed after io command`。
+1. **tree 缩进多了一层**（真实 bug，被测试抓到）。`TreeRenderer` 初版把根节点也算进前缀缩进，导致 `tree` 的第一层子节点前面多出 4 个空格，与 §5.1 不符。修正为"根不产生缩进段"（`for (…; depth > 1; …)`），并把 §5.1/§6 的完整 transcript 固化成断言，防止回归。
+2. **text 内容是子文本而非属性**，因此 XML 转义必须发生在写入时（`escapeXml`）、还原发生在读入时（`unescapeXml`）。第一版 `SvgReader` 忘了还原，round-trip 测试立刻暴露出 `Hello &amp; &lt;World&gt;` 被二次转义；修好后加了"save → read → 再 save，两次文件字节相同"的断言。
+3. **`ungroup` 之后容器本身要消失**（不是留下空壳）。实现上先把子节点从容器摘出、再把容器从父级摘出并注销 id，子节点占据容器原来的下标；undo 时反向复原。第一版误以为要保留空 `g`，用 z-order/ungroup 用例的 tree 输出确认了行为。
+4. **文档类命令的 undo 语义**：`init/read/save/canvas 改尺寸` 之后选择"清空两个栈 + 上锁"，而不是保留栈。理由是跨文档撤销的语义无法定义（撤销到已不存在的文档），§4.3 也只规定了要报 `undo not allowed after io command`。
+5. **undo 没有采用"文档快照"**。AI 最初的方案是每次编辑前深拷贝整份 `Document` 入栈——实现最省事，但会把内存占用与"可撤销次数"绑定，且快照式 undo 会把无关改动一起卷回。改为每个 `EditCommand` 自带逆操作所需的最小落点信息（原父容器 + 原下标 / 旧属性值），`group` 这类多目标命令也只是一个 undo 单元。
+6. **"按名字分派"的收敛过程**。初版在 `Interpreter` 里用 `switch (commandName)` 分发命令，等于把分派散在界面层；按 §2.1 的要求收敛到唯一一处 `CommandRegistry`（命令名 → 处理器），图形类型名 → `ShapeSpec` 收敛到 `ShapeFactory`，两者都在架构方案里标注为待重构项。
+7. **显示格式对齐规则的确定**。`tree` 的属性列需要对齐，但示例给出的列宽无法用同一条规则复现（§5.1/§6 对齐到第 19 列，§6.1 对齐到第 29 列且 `text#process-label` 一行明显溢出，判断为手工排版）。最终定为**全局单一对齐列**：列号 = 所有带属性行中「前缀长度 + 标签长度」的最大值 + 2，不足时至少留 1 个空格。该规则能逐字节复现 §5.1 与 §6 的完整 transcript（第 19 列），且任意 id 长度下都不会串行。
+8. **`line` 在 tree 里只显示端点**。§6.1 的 tree 中 `line#arrow1 (280,130) -> (520,130)` 不带 `stroke`，而 rect/circle 都带 `fill`，因此 `LineShape.summary()` 只输出两个端点，`stroke` 只在 `show` 里出现。
 
 ---
 
@@ -150,7 +150,7 @@ Interp --> Err
 
 ## 质量保证手段
 
-1. **transcript 回归测试**（`npm test`，9 组断言、全部通过）。把 spec 里的会话直接固化成期望输出：
+1. **transcript 回归测试**（`npm test`，12 组断言、全部通过）。把 spec 里的会话直接固化成期望输出：
    - §6 完整 transcript（含 `save`/`read` 后的 id 自动补警告、undo 被 io 锁拒绝）；
    - §6.1 两节点流程图（`in` 子句自顶向下构建、容器整体平移）；
    - §4.2 错误信息表**逐条**（id 重复 / 无此图形 / 无此容器 / 不是容器 / 未知类型 / 缩放非正 / 未知属性 / 读文件失败 / 根级容器 ungroup / 环检测）；
@@ -175,20 +175,9 @@ Interp --> Err
 | §4.2 错误信息表 | 表中 11 条全部实现 |
 | §4.3 undo/redo 粒度、文档类命令后禁止 | 全部实现 |
 | §4.4 复合图形 box | 本阶段不要求，未实现；已预留 `ShapeFactory.register` 与 `data-kind` 两个口子 |
-| §5 显示格式 | tree / show 结构一致；列宽与 `line` 字段两处差异见"过程记录" |
-| §1 提交内容 | git 分层提交 + `final` tag 已完成；**推送到远程仓库需本人完成** |
-
-### 任务书未规定、由我自行定义的文案
-
-| 场景 | 采用文案 |
-|---|---|
-| undo / redo 空栈 | `error: nothing to undo` / `error: nothing to redo` |
-| 文档类命令后 redo | `error: redo not allowed after io command`（任务书只写了 undo，此处对称补充） |
-| `save` 无参数且无读入路径 | `error: no file name given. usage: save <file.svg>` |
-| 参数缺失 | `error: missing <id>` / `missing <attr>` / `missing <value>` / `usage: …` |
-| `ungroup` 目标不是容器 | `error: not a container: <id>` |
-| `addto` 把容器移进自己的子孙 | `error: cannot move a container into its own descendant: <id>`（任务书只给了 group 的同款文案） |
-| 成功回显（任务书无示例） | `scale` → `x#id scaled by 2`；`addto` → `x#id added to g#y`；`front/back` → `x#id moved to front`；`ungroup` → `g#id ungrouped, N children lifted to …` |
+| §5 显示格式 | tree / show 结构、缩进、属性内联与 §5.1/§5.2/§6/§6.1 示例一致 |
+| §1.1 代码（git） | 分层提交（8 次）+ `final` tag，已推送远程仓库 |
+| §1.2 文档 | `doc/README.md`，含架构方案四节 + 过程记录 + 一致性自查 + 质量保证 |
 
 ---
 

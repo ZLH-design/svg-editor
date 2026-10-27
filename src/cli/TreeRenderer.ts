@@ -12,17 +12,26 @@ interface Row {
 
 /**
  * tree 输出渲染：结构树 + 内联几何属性。
- * 同一层的属性列对齐（按该层最长标签补齐），保证脱离画布也能读。
+ * 所有行的属性列对齐到同一列（由「前缀长度 + 标签长度」最大的一行决定，再补 2 个空格，
+ * 至少保留 1 个空格），保证脱离画布也能读。
  */
 export class TreeRenderer {
   render(document: Document, root: Shape): string[] {
     const rows: Row[] = [];
     this.collect(document, root, 0, true, rows);
-    const widths = new Map<number, number>();
-    for (const row of rows) {
-      widths.set(row.depth, Math.max(widths.get(row.depth) ?? 0, row.label.length));
-    }
-    return rows.map((row) => this.formatRow(row, rows, widths));
+    const prefixes = rows.map((_, index) => this.prefixOf(index, rows));
+    let column = 0;
+    rows.forEach((row, index) => {
+      if (row.summary !== '') {
+        column = Math.max(column, prefixes[index].length + row.label.length + 2);
+      }
+    });
+    return rows.map((row, index) => {
+      const prefix = prefixes[index];
+      if (row.summary === '') return prefix + row.label;
+      const pad = Math.max(1, column - prefix.length - row.label.length);
+      return prefix + row.label + ' '.repeat(pad) + row.summary;
+    });
   }
 
   private collect(
@@ -57,17 +66,9 @@ export class TreeRenderer {
     return kind === undefined ? shape.label() : `${shape.label()} (${kind})`;
   }
 
-  private formatRow(row: Row, rows: Row[], widths: Map<number, number>): string {
-    const prefix = this.prefixOf(row, rows);
-    const width = widths.get(row.depth) ?? row.label.length;
-    const padded = row.label.padEnd(width + 2, ' ');
-    const summary = row.summary === '' ? '' : padded + row.summary;
-    return (prefix + (summary === '' ? row.label : summary)).trimEnd();
-  }
-
   /** 依据各行祖先的 isLast 标记拼出 ├── / └── / │ 前缀。 */
-  private prefixOf(row: Row, rows: Row[]): string {
-    const index = rows.indexOf(row);
+  private prefixOf(index: number, rows: Row[]): string {
+    const row = rows[index];
     if (index === 0) return '';
     const ancestors: boolean[] = [];
     let depth = row.depth;
