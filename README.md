@@ -1,5 +1,7 @@
 # Lab1 Phase 1 — SVG 编辑器（CLI）
 
+**git 仓库地址**：<https://github.com/ZLH-design/svg-editor>（分支 `main`，最终提交处 tag `final`）
+
 TypeScript + Node 实现的命令行 SVG 编辑器：图形以 `id` 定位，容器与叶子统一操作（Composite），
 每个编辑动作都是一个可撤销的命令对象（Command）。
 
