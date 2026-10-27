@@ -141,7 +141,10 @@ Interp --> Err
    - `io` 中没有 `../cli`、`../commands`。
    三条禁止规则均未被违反。"按名字分派"只出现在 `CommandRegistry`（命令名）与 `ShapeFactory`（类型名），已按范式要求标注为待重构项。
 
-> 修订记录：初版把 `copyStyle` 这类跨图形工具函数塞在 `RectShape.ts` 里（违反"一类一文件"），已改为各 `clone()` 内联三行；`CliError` 从 `cli/` 移到 `shared/`，否则 `model`/`commands` 会反向依赖 `cli`。
+> 修订记录：
+> 1. 初版把 `copyStyle` 这类跨图形工具函数塞在 `RectShape.ts` 里（违反"一类一文件"），已改为各 `clone()` 内联三行；
+> 2. `CliError` 从 `cli/` 移到 `shared/`，否则 `model`/`commands` 会反向依赖 `cli`；
+> 3. `src/cli/handlers/` 下 8 个文件的文件名与类名不一致（如 `CreateCommand.ts` 里是 `CreateCommandHandler`），违反 §2.1"文件名 = 类名"，已统一重命名为 `*CommandHandler.ts`。
 
 ---
 
@@ -158,6 +161,34 @@ Interp --> Err
 3. **IO 隔离带来的可测性**：`FileSystem` 端口让测试完全不碰磁盘，能直接断言序列化结果，也让"文件不可读/不可写"的分支可以被稳定触发。
 4. **人工验收**：`npm run cli` 手跑 spec §0 的最小例子，`save demo.svg` 后用浏览器打开确认渲染；`help` 输出与命令表逐条核对。
 5. **已知未覆盖**：复合图形 `box`（插件化阶段目标，本阶段 `create box` 正确报 `unknown shape type`）；XPath 式结构路径寻址（本阶段不要求）。
+
+---
+
+## 附：与任务书的逐条对照
+
+| 任务书条款 | 结论 |
+|---|---|
+| §2 通用约定（提示符 `svg>`、`#` 注释、id 定位、缺 id 自动补并警告、坐标系、双引号、`error:` 前缀、成功回显） | 全部实现。"失败不改状态"已固化成测试：一串失败命令之后 `tree` 不变、`read` 失败后原文档保持 |
+| §2.1 范式（TS+OOP、一类一文件、禁止贫血模型、按名字分派只允许两处、容器与叶子统一操作） | 全部满足。按名字分派只有 `CommandRegistry`（命令名）与 `ShapeFactory`（类型名）两处，已标注为待重构 |
+| §3 命令总表 | 20 条全部实现。额外多出 `exit` / `quit` 两个 REPL 退出命令（不参与作业命令表，已在 help 列出） |
+| §4.1 六种类型、`in` 子句、`set` 白名单、fill/stroke 省略不写 | 全部实现。`create box` 正确报 `unknown shape type` |
+| §4.2 错误信息表 | 表中 11 条全部实现 |
+| §4.3 undo/redo 粒度、文档类命令后禁止 | 全部实现 |
+| §4.4 复合图形 box | 本阶段不要求，未实现；已预留 `ShapeFactory.register` 与 `data-kind` 两个口子 |
+| §5 显示格式 | tree / show 结构一致；列宽与 `line` 字段两处差异见"过程记录" |
+| §1 提交内容 | git 分层提交 + `final` tag 已完成；**推送到远程仓库需本人完成** |
+
+### 任务书未规定、由我自行定义的文案
+
+| 场景 | 采用文案 |
+|---|---|
+| undo / redo 空栈 | `error: nothing to undo` / `error: nothing to redo` |
+| 文档类命令后 redo | `error: redo not allowed after io command`（任务书只写了 undo，此处对称补充） |
+| `save` 无参数且无读入路径 | `error: no file name given. usage: save <file.svg>` |
+| 参数缺失 | `error: missing <id>` / `missing <attr>` / `missing <value>` / `usage: …` |
+| `ungroup` 目标不是容器 | `error: not a container: <id>` |
+| `addto` 把容器移进自己的子孙 | `error: cannot move a container into its own descendant: <id>`（任务书只给了 group 的同款文案） |
+| 成功回显（任务书无示例） | `scale` → `x#id scaled by 2`；`addto` → `x#id added to g#y`；`front/back` → `x#id moved to front`；`ungroup` → `g#id ungrouped, N children lifted to …` |
 
 ---
 

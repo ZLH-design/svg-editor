@@ -376,6 +376,55 @@ console.log('misc: z-order / ungroup / redo 栈');
   ]);
 }
 
+// ── 约定自检：失败不改状态 / id 大小写敏感 / io 锁 ───────────────────────
+console.log('spec 2: 通用约定');
+{
+  const files = new InMemoryFileSystem();
+  files.seed('empty.svg', '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>');
+  const session = new Session(files);
+  const out = run(session, [
+    'init 100 100',
+    'create rect r1 1 2 3 4',
+    'set r1 bogus 9',
+    'scale r1 0',
+    'group gx r1 nope',
+    'create hexagon h1',
+    'read nope.svg',
+    'delete nope',
+    'tree',
+    'create rect R1 0 0 1 1',
+    'save',
+    'undo',
+  ]);
+  expect('失败命令不改变状态 + 大小写敏感', out, [
+    'canvas 100x100 created',
+    'rect#r1 created',
+    'error: unknown attribute: bogus',
+    'error: scale factor must be positive',
+    'error: no such shape: nope',
+    'error: unknown shape type: hexagon (is the plugin loaded?)',
+    'error: cannot read file: nope.svg',
+    'error: no such shape: nope',
+    'svg (100x100)',
+    '└── rect#r1  x=1 y=2 w=3 h=4',
+    'rect#R1 created',
+    'error: no file name given. usage: save <file.svg>',
+    'rect#R1 removed',
+  ]);
+
+  const afterFailedRead = run(session, ['read nope.svg', 'tree']);
+  expect('read 失败后原文档保持', afterFailedRead, [
+    'error: cannot read file: nope.svg',
+    'svg (100x100)',
+    '└── rect#r1  x=1 y=2 w=3 h=4',
+  ]);
+
+  const box = run(session, ['create box n1 1 2 3 4 "标题"']);
+  expect('box 本阶段未实现', box, [
+    'error: unknown shape type: box (is the plugin loaded?)',
+  ]);
+}
+
 console.log('');
 console.log(`${checks - failures}/${checks} checks passed`);
 if (failures > 0) {
